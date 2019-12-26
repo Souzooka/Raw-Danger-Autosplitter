@@ -73,19 +73,16 @@ startup
   {
     new int[] {2, 2, 2}, // Amber - Police Station
     new int[] {3, 7, 0}, // Isaac - Discovery Heights
-  };
-  vars.EndMaps = new int[][]
-  {
-    new int[] {1, 5, 0}, // Ch.1
-    new int[] {1, 9, 0}, // Ch.1
-    new int[] {1, 9, 1}, // Ch.1
-    new int[] {2, 4, 0}, // Ch.2
-    new int[] {2, 8, 0}, // Ch.2
-    new int[] {3, 2, 1}, // Ch.3
-    new int[] {3, 15, 0}, // Ch.3
-    new int[] {4, 3, 0}, // Ch.4
-    new int[] {5, 7, 0}, // Ch.5
-    new int[] {6, 1, 0}, // Ch.6
+    new int[] {1, 5, 0}, // Ch.1 End
+    new int[] {1, 9, 0}, // Ch.1 End
+    new int[] {1, 9, 1}, // Ch.1 End
+    new int[] {2, 4, 0}, // Ch.2 End
+    new int[] {2, 8, 0}, // Ch.2 End
+    new int[] {3, 2, 1}, // Ch.3 End
+    new int[] {3, 15, 0}, // Ch.3 End
+    new int[] {4, 3, 0}, // Ch.4 End
+    new int[] {5, 7, 0}, // Ch.5 End
+    new int[] {6, 1, 0}, // Ch.6 End
   };
 
   // SETTINGS
@@ -95,10 +92,11 @@ startup
     settings.Add(vars.AreaNames[i], false, vars.AreaNames[i], "splits");
     for (int j = 0; j < vars.Maps[i].Length; ++j)
     {
-      int[] mapIDs = vars.Maps[i][j].Item1;
-      string key = mapIDs[0].ToString().PadLeft(2, '0') + "_" + mapIDs[1].ToString().PadLeft(2, '0') + "_" + mapIDs[2].ToString().PadLeft(2, '0');
-      string mapName = vars.Maps[i][j].Item2;
-      settings.Add(key, false, mapName, vars.AreaNames[i]);
+      int[] MapIDs = vars.Maps[i][j].Item1;
+      string Key = String.Join("_", MapIDs.Select(id => id.ToString()));
+      print(Key);
+      string MapName = vars.Maps[i][j].Item2;
+      settings.Add(Key, false, MapName, vars.AreaNames[i]);
     }
   }
 }
@@ -155,33 +153,28 @@ split
   // Return false on very first update to prevent false split -- thankfully 0 is NO SCENE
   if (vars.Area.Old == 0) { return false; }
 
-  // TODO: Handle special and campaign end cases
-  // Change of map
+  // TODO: Handle campaign-end levels
 
+  // Map Changed
   if (vars.Level.Old != vars.Level.Current || vars.SubLevel.Old != vars.SubLevel.Current)
   {
     // Don't split when characters are changed
     if (vars.Area.Old != vars.Area.Current) { return false; }
 
-    int[] mapIDs = null;
-    foreach (Tuple<int[], string>[] area in vars.Maps)
-    {
-      foreach (Tuple<int[], string> subarea in area)
-      {
-        if (vars.Area.Old == subarea.Item1[0] && vars.Level.Old == subarea.Item1[1] && vars.SubLevel.Old == subarea.Item1[2])
-        {
-          mapIDs = subarea.Item1;
-          break;
-        }
-      }
-    }
-    if (mapIDs == null) { return false; }
-    string key = mapIDs[0].ToString().PadLeft(2, '0') + "_" + mapIDs[1].ToString().PadLeft(2, '0') + "_" + mapIDs[2].ToString().PadLeft(2, '0');
+    int[] CurrentMapIDs = new int[] { vars.Area.Current, vars.Level.Current, vars.SubLevel.Current };
+    int[] OldMapIDs = new int[] { vars.Area.Old, vars.Level.Old, vars.SubLevel.Old };
+    string Key = String.Join("_", OldMapIDs.Select(id => id.ToString()));
+    string NewKey = String.Join("_", CurrentMapIDs.Select(id => id.ToString()));
 
-    if (!vars.Splits.Contains(key))
+    // Handle special cases
+    if      (Key == "2_2_0" && NewKey != "2_3_0")  { return false; } // Split for police station; prevent split on flashback to apartment
+    else if (Key == "3_7_0" && NewKey != "3_10_0") { return false; } // Split for Isaac finding Jaden; prevent split for leaving without Jaden
+
+    // Handle normal cases
+    if (!vars.Splits.Contains(Key))
     {
-      vars.Splits.Add(key);
-      return settings[key];
+      vars.Splits.Add(Key);
+      return settings[Key];
     }
   }
 }
