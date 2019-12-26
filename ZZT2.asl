@@ -87,40 +87,60 @@ startup
 
 init
 {
-  // In case of a PCSX2 update changing this, or using this script on another emulator
-  const int Pcsx2Offset = 0x20000000;
-
   // Boolean values to check if the split has already been hit
   vars.Splits = new HashSet<string>();
 
   // For game time
   vars.FramesPerSecond = 20.0f;
-  vars.GameTimeFrames = new MemoryWatcher<int>((IntPtr)0x67DC40 + Pcsx2Offset);
-  vars.Area = new MemoryWatcher<int>((IntPtr)0x4922C0 + Pcsx2Offset);
-  vars.Level = new MemoryWatcher<int>((IntPtr)0x4922C4 + Pcsx2Offset);
-  vars.SubLevel = new MemoryWatcher<int>((IntPtr)0x4922C8 + Pcsx2Offset);
+  vars.GameTimeFrames = new MemoryWatcher<int>((IntPtr)0x2067DC40);
+
+  // For splits
+  vars.Area = new MemoryWatcher<int>((IntPtr)0x204922C0);
+  vars.Level = new MemoryWatcher<int>((IntPtr)0x204922C4);
+  vars.SubLevel = new MemoryWatcher<int>((IntPtr)0x204922C8);
+  vars.Gate = new MemoryWatcher<int>((IntPtr)0x204922CC);
+  vars.EpilogueDataPtr = new MemoryWatcher<int>((IntPtr)0x20490538);
 
   vars.Watchers = new MemoryWatcherList
   {
     vars.GameTimeFrames,
     vars.Area,
     vars.Level,
-    vars.SubLevel
+    vars.SubLevel,
+    vars.Gate,
+    vars.EpilogueDataPtr
   };
 
+  // Utility Functions
+  // I found a different way to check for endings, but these may still prove useful
   vars.FlagCheck = (Func<int, bool>)
   (flag => {
     IntPtr FlagsBase = (IntPtr)0x206092F0;
     char test = memory.ReadValue<char>(IntPtr.Add(FlagsBase, flag / 8));
     return (test & (1 << (flag & 7))) != 0;
   });
+  vars.IsScriptExecuting = (Func<int, bool>)
+  (ScriptPtr => {
+    // Checks if a given script has been added to the coroutine system and is not explicitly marked as terminated.
+
+    if (ScriptPtr == null) { return false; }
+    IntPtr ScriptMgr = (IntPtr)(memory.ReadValue<int>((IntPtr)0x2048F590));
+    if (ScriptMgr == IntPtr.Zero) { return false; }
+
+    while (ScriptMgr != IntPtr.Zero)
+    {
+      if (memory.ReadValue<int>(IntPtr.Add(ScriptMgr, 0x2000000C)) == ScriptPtr)
+      {
+        return memory.ReadValue<int>(IntPtr.Add(ScriptMgr, 0x20000018)) != 6;
+      }
+      ScriptMgr = (IntPtr)(memory.ReadValue<int>(IntPtr.Add(ScriptMgr, 0x20000004)));
+    }
+    return false;
+  });
 }
 
 update
 {
-  // In case of a PCSX2 update changing this, or using this script on another emulator
-  const int Pcsx2Offset = 0x20000000;
-
   // Update memory watchers
   vars.Watchers.UpdateAll(game);
 
@@ -150,14 +170,19 @@ split
   string NewKey = String.Join("_", CurrentMapIDs.Select(id => id.ToString()));
   bool EndingSplit = false;
 
-  // TODO: Handle rest of campaign-end levels
   // End of campaign splits
-  if (Key == "1_5_0" && vars.FlagCheck(7005)) { EndingSplit = true; }
-
-  if (EndingSplit && !vars.Splits.Contains(Key))
+  if (vars.EpilogueDataPtr.Current != 0)
   {
-    vars.Splits.Add(Key);
-    return settings[Key];
+    if (Key == "1_9_0")
+    {
+      if (vars.Gate.Current >= 2) { Key = "1_9_1"; }
+    }
+
+    if (!vars.Splits.Contains(Key))
+    {
+      vars.Splits.Add(Key);
+      return settings[Key];
+    }
   }
 
   // Map Changed
